@@ -27,6 +27,8 @@ from .awesome_finder import AwesomeFinder
 from .config import PromoterConfig
 from .content_generator import ContentGenerator
 from .github_monitor import GitHubMonitor
+from .executors.awesome_pr import AwesomePRExecutor
+from .executors.social_post import SocialPostExecutor
 from .hardware_analyzer import print_hardware_report
 from .llm_adapter import LLMAdapter
 from .notifier import Notifier
@@ -42,6 +44,7 @@ def main() -> None:
     parser.add_argument("--reason", default="", help="Reason for approve/reject")
     parser.add_argument("--llm-check", action="store_true", help="Test LLM connectivity")
     parser.add_argument("--hardware", action="store_true", help="Analyze hardware and recommend LLM setup")
+    parser.add_argument("--execute", metavar="ID", help="Execute an approved action")
     args = parser.parse_args()
 
     config = PromoterConfig.from_env()
@@ -107,22 +110,60 @@ def main() -> None:
 
     if args.queue:
         pending = queue.list_actions(status=ActionStatus.PENDING)
-        if not pending:
-            print("No pending actions.")
+        approved = queue.list_actions(status=ActionStatus.APPROVED)
+        if not pending and not approved:
+            print("No pending or approved actions.")
             return
-        print(f"\nPending actions ({len(pending)}):\n")
-        for action in pending:
-            print(f"  ID:       {action.id}")
-            print(f"  Type:     {action.type}")
-            print(f"  Title:    {action.title}")
-            print(f"  Created:  {action.created_at}")
-            print(f"  Target:   {action.target_url}")
-            if action.description:
-                print(f"  Desc:     {action.description[:200]}")
-            print(f"  Approve:  trnx-promoter --approve {action.id}")
-            print(f"  Reject:   trnx-promoter --reject {action.id}")
-            print("-" * 50)
+        if pending:
+            print(f"\nPending actions ({len(pending)}):\n")
+            for action in pending:
+                print(f"  ID:       {action.id}")
+                print(f"  Type:     {action.type}")
+                print(f"  Title:    {action.title}")
+                print(f"  Created:  {action.created_at}")
+                print(f"  Target:   {action.target_url}")
+                if action.description:
+                    print(f"  Desc:     {action.description[:200]}")
+                print(f"  Approve:  trnx-promoter --approve {action.id}")
+                print(f"  Reject:   trnx-promoter --reject {action.id}")
+                print("-" * 50)
+        if approved:
+            print(f"\nApproved actions ({len(approved)}):\n")
+            for action in approved:
+                print(f"  ID:       {action.id}")
+                print(f"  Type:     {action.type}")
+                print(f"  Title:    {action.title}")
+                print(f"  Execute:  trnx-promoter --execute {action.id}")
+                print("-" * 50)
         return
+
+    if args.execute:
+        action = queue.get(args.execute)
+        if not action:
+            print(f"Action {args.execute} not found.")
+            sys.exit(1)
+        if action.status != ActionStatus.APPROVED:
+            print(f"Action {args.execute} is not approved (status: {action.status.value}).")
+            print(f"Approve first: trnx-promoter --approve {args.execute}")
+            sys.exit(1)
+
+        executors = [AwesomePRExecutor(config), SocialPostExecutor(config)]
+        for executor in executors:
+            if executor.can_execute(action):
+                print(f"Executing: {action.title}")
+                result = executor.execute(action)
+                if result["success"]:
+                    queue.mark_done(action.id)
+                    print(f"\n✅ Done!")
+                    print(f"File: {result['output_path']}")
+                    print(f"\n{result['message']}")
+                else:
+                    queue.mark_failed(action.id, result.get("message", ""))
+                    print(f"\n❌ Failed: {result['message']}")
+                return
+
+        print(f"No executor found for action type: {action.type}")
+        sys.exit(1)
 
     monitor = GitHubMonitor(
         owner=config.github_owner,
