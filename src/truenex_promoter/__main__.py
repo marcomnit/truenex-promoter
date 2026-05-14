@@ -27,11 +27,17 @@ from .awesome_finder import AwesomeFinder
 from .config import PromoterConfig
 from .content_generator import ContentGenerator
 from .github_monitor import GitHubMonitor
+from .devto_generator import DevToGenerator
 from .executors.awesome_pr import AwesomePRExecutor
+from .executors.devto_article import DevToArticleExecutor
+from .executors.producthunt_launch import ProductHuntLaunchExecutor
 from .executors.social_post import SocialPostExecutor
+from .executors.stackoverflow_answer import StackOverflowAnswerExecutor
 from .hardware_analyzer import print_hardware_report
 from .llm_adapter import LLMAdapter
 from .notifier import Notifier
+from .producthunt_generator import ProductHuntGenerator
+from .stackoverflow_finder import StackOverflowFinder
 
 
 def main() -> None:
@@ -147,7 +153,13 @@ def main() -> None:
             print(f"Approve first: trnx-promoter --approve {args.execute}")
             sys.exit(1)
 
-        executors = [AwesomePRExecutor(config), SocialPostExecutor(config)]
+        executors = [
+            AwesomePRExecutor(config),
+            SocialPostExecutor(config),
+            StackOverflowAnswerExecutor(config),
+            DevToArticleExecutor(config),
+            ProductHuntLaunchExecutor(config),
+        ]
         for executor in executors:
             if executor.can_execute(action):
                 print(f"Executing: {action.title}")
@@ -222,6 +234,8 @@ def main() -> None:
 
                 elif event.event_type == "new_release":
                     tag = event.data.get("tag", "")
+
+                    # Social post
                     draft = generator.release_post(tag, event.description)
                     action = Action(
                         type="social_post",
@@ -234,7 +248,39 @@ def main() -> None:
                     queue.add(action)
                     notifier.action_proposed(action.id, action.title, action.description)
 
+                    # dev.to article
+                    if config.enable_devto_drafts:
+                        devto = DevToGenerator(config, llm=llm)
+                        draft = devto.generate_article(tag, event.description)
+                        action = Action(
+                            type="devto_article",
+                            title=f"Write dev.to article for {tag}",
+                            description=f"Publish a developer blog post about release {tag}.",
+                            draft_content=draft,
+                            target_url="https://dev.to/new",
+                            data={"tag": tag},
+                        )
+                        queue.add(action)
+                        notifier.action_proposed(action.id, action.title, action.description)
+
+                    # Product Hunt launch material
+                    if config.enable_producthunt_drafts:
+                        ph = ProductHuntGenerator(config, llm=llm)
+                        draft = ph.generate_launch(tag)
+                        action = Action(
+                            type="producthunt_launch",
+                            title=f"Prepare Product Hunt launch for {tag}",
+                            description=f"Generate launch material for Product Hunt.",
+                            draft_content=draft,
+                            target_url="https://www.producthunt.com/posts/new",
+                            data={"tag": tag},
+                        )
+                        queue.add(action)
+                        notifier.action_proposed(action.id, action.title, action.description)
+
             # Proactive discovery: Awesome Lists
+            candidates: list = []
+            questions: list = []
             if config.enable_awesome_finder:
                 notifier.info("Searching for Awesome List opportunities...")
                 finder = AwesomeFinder(config)
@@ -256,7 +302,29 @@ def main() -> None:
                     queue.add(action)
                     notifier.action_proposed(action.id, action.title, action.description)
 
-            if not events and not candidates:
+            # Proactive discovery: Stack Overflow
+            if config.enable_stackoverflow_finder:
+                notifier.info("Searching for Stack Overflow questions...")
+                so = StackOverflowFinder(config)
+                questions = so.find_questions(max_results=5)
+                existing = {a.target_url for a in queue.list_actions()}
+                for q in questions:
+                    url = q.get("url", "")
+                    if url in existing:
+                        continue
+                    draft = so.generate_draft(q)
+                    action = Action(
+                        type="stackoverflow_answer",
+                        title=f"Answer: {q.get('title', '')[:60]}...",
+                        description=f"Unanswered question tagged with project keywords.",
+                        draft_content=draft,
+                        target_url=url,
+                        data=q,
+                    )
+                    queue.add(action)
+                    notifier.action_proposed(action.id, action.title, action.description)
+
+            if not events and not candidates and not questions:
                 notifier.info("No new events or opportunities")
 
         except Exception as e:

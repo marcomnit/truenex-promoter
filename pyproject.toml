@@ -7,7 +7,7 @@ name = "truenex-promoter"
 version = "0.1.0-alpha.1"
 description = "Autonomous AI marketing agent for open-source projects"
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 requires-python = ">=3.11"
 authors = [
     { name = "Marco Comunita", email = "marco@truenex.ai" },
@@ -16,7 +16,6 @@ keywords = ["marketing", "open-source", "github", "promotion", "agent"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",

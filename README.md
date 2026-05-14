@@ -4,6 +4,17 @@ Autonomous AI marketing agent for open-source projects. Monitors your repo, disc
 
 > **Human-in-the-loop by design.** The agent proposes, you decide. No automated posts, no spam, no surprises.
 
+## Product Strategy: Open Core + Freemium UI
+
+| Edition | Interface | What's included | Price |
+|---|---|---|---|
+| **OSS** | **CLI** (this repo) | Monitoring, queue, generators, LLM local/remote, hardware analyzer | **Free** |
+| **Pro** | **Desktop UI** (Tauri) | System tray, dashboard, analytics, auto-executors | **$19/mo** |
+| **Team** | **Desktop + Cloud** | Multi-repo, multi-user, sync | **$49/mo** |
+| **Enterprise** | **SaaS Web** | Zero install, white-label, API, support | **Custom** |
+
+The CLI is and will remain **open-source forever**. The UI is a closed-source paid add-on.
+
 ## Current Status
 
 Alpha — dogfooding on [Truenex Memory](https://github.com/marcomnit/truenex-memory).

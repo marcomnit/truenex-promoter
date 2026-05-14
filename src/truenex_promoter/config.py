@@ -43,7 +43,9 @@ class PromoterConfig:
 
     # Feature toggles
     enable_awesome_finder: bool = True
-    enable_social_drafts: bool = True
+    enable_stackoverflow_finder: bool = True
+    enable_devto_drafts: bool = True
+    enable_producthunt_drafts: bool = True
 
     @classmethod
     def from_env(cls) -> "PromoterConfig":
